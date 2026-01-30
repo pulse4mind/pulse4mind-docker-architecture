@@ -15,14 +15,14 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 512M
+          memory: 1024M
 
 volumes:
   redis_data:
     external: true
-    name: "${TENANT}_${ENV}_redis_data"
+    name: redis_data
 
 networks:
   data:
     external: true
-    name: "${DOCKER_NETWORK}"
+    name: "${DATA_NETWORK}"
