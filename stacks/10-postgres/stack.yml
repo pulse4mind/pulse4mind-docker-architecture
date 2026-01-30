@@ -1,0 +1,37 @@
+version: "3.7"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg14
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - data
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1024M
+
+secrets:
+  postgres_password:
+    external: true
+    name: "${TENANT}_${ENV}_postgres_password"
+
+volumes:
+  postgres_data:
+    external: true
+    name: "${TENANT}_${ENV}_postgres_data"
+
+networks:
+  data:
+    external: true
+    name: "${DOCKER_NETWORK}"
