@@ -20,7 +20,7 @@ services:
 volumes:
   redis_data:
     external: true
-    name: redis_data
+    name: "${TENANT}_${ENV}_redis_data"
 
 networks:
   data:
