@@ -8,7 +8,7 @@ services:
       - "--providers.docker.swarmMode=true"
       - "--providers.docker.endpoint=unix:///var/run/docker.sock"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=${DOCKER_NETWORK}"
+      - "--providers.docker.network=${EDGE_NETWORK}"
 
       - "--entrypoints.web.address=:80"
       - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
@@ -39,7 +39,7 @@ services:
 
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "traefik_certs:/etc/traefik/letsencrypt"
+      - "vol_certificates:/etc/traefik/letsencrypt"
 
     ports:
       - target: 80
@@ -53,11 +53,11 @@ services:
       - edge
 
 volumes:
-  traefik_certs:
+  vol_certificates:
     external: true
-    name: "${TENANT}_${ENV}_traefik_certs"
+    name: volume_swarm_certificates
 
 networks:
   edge:
     external: true
-    name: "${DOCKER_NETWORK}"
+    name: "${EDGE_NETWORK}"
