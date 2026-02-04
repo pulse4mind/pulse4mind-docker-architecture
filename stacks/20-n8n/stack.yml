@@ -25,14 +25,26 @@ x-n8n-env: &n8n_env
   GENERIC_TIMEZONE: ${TZ}
   TZ: ${TZ}
 
-  # (Opcional, mas recomendado p/ produção)
   N8N_LOG_LEVEL: info
   N8N_DIAGNOSTICS_ENABLED: "false"
 
 services:
   n8n_editor:
     image: n8nio/n8n:1.90.2
-    command: /bin/sh -lc 'export N8N_ENCRYPTION_KEY="$$(cat /run/secrets/n8n_encryption_key)" && exec n8n start'
+    command:
+      - sh
+      - -lc
+      - |
+        set -e
+
+        # Diagnóstico seguro (não imprime conteúdo de secrets)
+        echo "== secrets available =="
+        ls -lah /run/secrets || true
+
+        test -f /run/secrets/n8n_encryption_key || { echo "ERROR: missing /run/secrets/n8n_encryption_key"; exit 1; }
+        export N8N_ENCRYPTION_KEY="$$(cat /run/secrets/n8n_encryption_key)"
+
+        exec n8n start
     networks:
       - edge
       - data
@@ -58,7 +70,14 @@ services:
 
   n8n_webhook:
     image: n8nio/n8n:1.90.2
-    command: /bin/sh -lc 'export N8N_ENCRYPTION_KEY="$$(cat /run/secrets/n8n_encryption_key)" && exec n8n webhook'
+    command:
+      - sh
+      - -lc
+      - |
+        set -e
+        test -f /run/secrets/n8n_encryption_key || { echo "ERROR: missing /run/secrets/n8n_encryption_key"; ls -lah /run/secrets || true; exit 1; }
+        export N8N_ENCRYPTION_KEY="$$(cat /run/secrets/n8n_encryption_key)"
+        exec n8n webhook
     networks:
       - edge
       - data
@@ -85,7 +104,14 @@ services:
 
   n8n_worker:
     image: n8nio/n8n:1.90.2
-    command: /bin/sh -lc 'export N8N_ENCRYPTION_KEY="$$(cat /run/secrets/n8n_encryption_key)" && exec n8n worker --concurrency=10'
+    command:
+      - sh
+      - -lc
+      - |
+        set -e
+        test -f /run/secrets/n8n_encryption_key || { echo "ERROR: missing /run/secrets/n8n_encryption_key"; ls -lah /run/secrets || true; exit 1; }
+        export N8N_ENCRYPTION_KEY="$$(cat /run/secrets/n8n_encryption_key)"
+        exec n8n worker --concurrency=10
     networks:
       - data
     environment:
@@ -102,12 +128,14 @@ services:
           - node.role == manager
 
 secrets:
+  # Hardcode para evitar qualquer falha de interpolação do Portainer/stack env
   postgres_password:
     external: true
-    name: "${TENANT}_${ENV}_postgres_password"
+    name: "thermas_prod_postgres_password"
+
   n8n_encryption_key:
     external: true
-    name: "${TENANT}_${ENV}_n8n_encryption_key"
+    name: "thermas_prod_n8n_encryption_key"
 
 networks:
   edge:
