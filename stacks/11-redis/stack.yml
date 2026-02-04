@@ -11,17 +11,18 @@ services:
     secrets:
       - redis_password
 
-    command: >
-      sh -lc '
-        exec redis-server
-        --appendonly yes
-        --port 6379
-        --maxmemory 768mb
-        --maxmemory-policy allkeys-lru
-        --save ""
-        --protected-mode yes
-        --requirepass "$$(cat /run/secrets/redis_password)"
-      '
+    command:
+      - sh
+      - -lc
+      - |
+        exec redis-server \
+          --appendonly yes \
+          --port 6379 \
+          --maxmemory 768mb \
+          --maxmemory-policy allkeys-lru \
+          --save "" \
+          --protected-mode yes \
+          --requirepass "$$(cat /run/secrets/redis_password)"
 
     deploy:
       placement:
@@ -46,10 +47,8 @@ services:
 
     healthcheck:
       test:
-        [
-          "CMD-SHELL",
-          "redis-cli -a \"$$(cat /run/secrets/redis_password)\" ping | grep -q PONG"
-        ]
+        - CMD-SHELL
+        - redis-cli -a "$$(cat /run/secrets/redis_password)" ping | grep -q PONG
       interval: 10s
       timeout: 3s
       retries: 5
@@ -62,9 +61,9 @@ secrets:
 volumes:
   redis_data:
     external: true
-    name: "${TENANT}_${ENV}_redis_data"
+    name: thermas_prod_redis_data
 
 networks:
   data:
     external: true
-    name: "${DATA_NETWORK}"
+    name: net_data
