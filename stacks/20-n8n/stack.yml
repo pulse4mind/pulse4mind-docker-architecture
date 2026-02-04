@@ -56,7 +56,8 @@ services:
   n8n_webhook:
     image: n8nio/n8n:1.90.2
     entrypoint: ["/bin/sh","-lc"]
-    command: "set -e; test -f /run/secrets/n8n_encryption_key || { echo 'ERROR missing n8n_encryption_key'; ls -lah /run/secrets || true; exit 1; }; export N8N_ENCRYPTION_KEY=\"$$(cat /run/secrets/n8n_encryption_key)\"; exec n8n webhook"    networks: [edge, data]
+    command: "set -e; test -f /run/secrets/n8n_encryption_key || { echo 'ERROR missing n8n_encryption_key'; ls -lah /run/secrets || true; exit 1; }; export N8N_ENCRYPTION_KEY=\"$$(cat /run/secrets/n8n_encryption_key)\"; exec n8n webhook"
+    networks: [edge, data]
     environment: { <<: *n8n_env }
     secrets:
       - source: postgres_password
