@@ -20,11 +20,11 @@ x-evolution-env: &evolution_env
 services:
   evolution_api:
     image: evoapicloud/evolution-api:v2.3.7
-
-    # CRÍTICO: garante que nossos exports acontecem ANTES do bootstrap do container
     entrypoint: ["/bin/sh", "-lc"]
     command: |
       set -eu;
+
+      echo "== Evolution bootstrap starting =="
 
       # Fail-fast: garante que os secrets existem
       test -f /run/secrets/postgres_password || { echo "ERROR missing postgres_password"; ls -lah /run/secrets || true; sleep 600; exit 1; };
@@ -38,7 +38,6 @@ services:
       REDIS_PASSWORD_ENC="$(node -e "process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/redis_password','utf8').trim()))")";
 
       # Preferencialmente via .env (padrão entre stacks); fallback coerente
-      # IMPORTANTE: o seu log mostrou host "postgres:5432", então o fallback aqui é "postgres"
       PG_HOST="${POSTGRES_HOST:-postgres}";
       PG_PORT="${POSTGRES_PORT:-5432}";
       RD_HOST="${REDIS_HOST:-redis}";
@@ -51,20 +50,23 @@ services:
       REDIS_URI="redis://:${REDIS_PASSWORD_ENC}@${RD_HOST}:${RD_PORT}/${EVO_CACHE_REDIS_DB}";
 
       export AUTHENTICATION_API_KEY="${AUTHENTICATION_API_KEY}";
-
-      # App + Prisma
       export DATABASE_CONNECTION_URI="${DB_URI}";
       export DATABASE_URL="${DB_URI}";
-
       export CACHE_REDIS_URI="${REDIS_URI}";
 
-      # Debug seguro (não imprime senha)
-      echo "Evolution bootstrap:"
-      echo "  PG_HOST=${PG_HOST} PG_PORT=${PG_PORT} DB_NAME=${DB_NAME} DB_SCHEMA=${DB_SCHEMA}"
-      echo "  RD_HOST=${RD_HOST} RD_PORT=${RD_PORT} EVO_CACHE_REDIS_DB=${EVO_CACHE_REDIS_DB}"
-      echo "  DATABASE_URL set? $([ -n "${DATABASE_URL:-}" ] && echo yes || echo no)"
+      echo "== AFTER EXPORTS (safe dump) =="
+      echo "PG_HOST=${PG_HOST} PG_PORT=${PG_PORT} DB_NAME=${DB_NAME} DB_SCHEMA=${DB_SCHEMA}"
+      echo "RD_HOST=${RD_HOST} RD_PORT=${RD_PORT} EVO_CACHE_REDIS_DB=${EVO_CACHE_REDIS_DB}"
+      echo "AUTHENTICATION_API_KEY set? $([ -n "${AUTHENTICATION_API_KEY:-}" ] && echo yes || echo no)"
+      echo "DATABASE_URL set? $([ -n "${DATABASE_URL:-}" ] && echo yes || echo no)"
+      echo "DATABASE_CONNECTION_URI set? $([ -n "${DATABASE_CONNECTION_URI:-}" ] && echo yes || echo no)"
+      echo "CACHE_REDIS_URI set? $([ -n "${CACHE_REDIS_URI:-}" ] && echo yes || echo no)"
 
-      # Start (se falhar, segura o container vivo p/ inspeção)
+      # Mostra apenas "shape" das URLs, sem senha
+      echo "DATABASE_URL (redacted)=$(echo "${DATABASE_URL}" | sed -E 's#(postgresql://[^:]+:)[^@]+(@)#\1***\2#')"
+      echo "CACHE_REDIS_URI (redacted)=$(echo "${CACHE_REDIS_URI}" | sed -E 's#(redis://:)[^@]+(@)#\1***\2#')"
+
+      echo "== Starting Evolution =="
       if ! npm run start:prod; then
         echo "ERROR: Evolution failed to start. Keeping container alive for 10 minutes for inspection..."
         sleep 600
