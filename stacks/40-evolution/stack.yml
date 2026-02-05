@@ -74,12 +74,6 @@ services:
         echo "DATABASE_URL (redacted)=$$(echo "$$DATABASE_URL" | sed -E 's#(postgresql://[^:]+:)[^@]+(@)#\1***\2#')"
         echo "CACHE_REDIS_URI (redacted)=$$(echo "$$CACHE_REDIS_URI" | sed -E 's#(redis://:)[^@]+(@)#\1***\2#')"
 
-        # Garante schema (algumas migrations não criam schema automaticamente)
-        echo "== Ensuring schema exists =="
-        PGPASSWORD_RAW="$$(cat /run/secrets/postgres_password | tr -d '\r\n')";
-        ( PGPASSWORD="$$PGPASSWORD_RAW" psql -h "$${PG_HOST}" -p "$${PG_PORT}" -U postgres -d "$${DB_NAME}" -c "CREATE SCHEMA IF NOT EXISTS $${DB_SCHEMA};" ) \
-          || { echo "ERROR creating schema $${DB_SCHEMA} in DB $${DB_NAME}"; exit 1; };
-
         # Aplica migrations (idempotente) antes de subir o app
         echo "== Running migrations (db:deploy) =="
         npm run db:deploy
