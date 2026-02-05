@@ -3,62 +3,51 @@ version: "3.7"
 x-evolution-env: &evolution_env
   TZ: ${TZ}
   DOCKER_ENV: "true"
-
-  # Server
   SERVER_URL: "https://${DOMAIN_EVO}"
 
-  # Auth
   AUTHENTICATION_TYPE: "apikey"
 
-  # Database (provider ok; URI será setada no entrypoint script)
   DATABASE_ENABLED: "true"
   DATABASE_PROVIDER: "postgresql"
 
-  # Cache (URI será setada no script)
   CACHE_REDIS_ENABLED: "true"
   CACHE_LOCAL_ENABLED: "false"
   CACHE_REDIS_PREFIX_KEY: "${EVO_CACHE_PREFIX}"
   EVO_CACHE_REDIS_DB: "${EVO_CACHE_REDIS_DB}"
 
-  # Logs (pode ser lista: ERROR,WARN,INFO,...)
   LOG_LEVEL: "${EVO_LOG_LEVEL}"
 
 services:
   evolution_api:
     image: evoapicloud/evolution-api:v2.3.7
-
-    # CRÍTICO: bypass no entrypoint do container (senão migrations rodam antes dos exports)
-    entrypoint:
+    command:
       - sh
       - -lc
+      - |
+        set -e;
 
-    command: |
-      set -e;
+        POSTGRES_PASSWORD="$$(cat /run/secrets/postgres_password | tr -d '\r\n')";
+        AUTHENTICATION_API_KEY="$$(cat /run/secrets/evolution_api_key | tr -d '\r\n')";
 
-      # Secrets (trim)
-      POSTGRES_PASSWORD="$$(cat /run/secrets/postgres_password | tr -d '\r\n')";
-      AUTHENTICATION_API_KEY="$$(cat /run/secrets/evolution_api_key | tr -d '\r\n')";
+        REDIS_PASSWORD_ENC="$$(node -e "process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/redis_password','utf8').trim()))")";
 
-      # Redis URL-encode
-      REDIS_PASSWORD_ENC="$$(node -e "process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/redis_password','utf8').trim()))")";
+        # Hosts iguais ao Chatwoot que funciona
+        PG_HOST="postgres_postgres";
+        RD_HOST="redis_redis";
 
-      # DNS do Swarm: siga o padrão que já funciona no Chatwoot
-      PG_HOST="postgres_postgres";
-      RD_HOST="redis_redis";
+        # *** SEM SCHEMA ***
+        DB_URI="postgresql://postgres:$${POSTGRES_PASSWORD}@$${PG_HOST}:5432/evolution_db";
+        REDIS_URI="redis://:$${REDIS_PASSWORD_ENC}@$${RD_HOST}:6379/$${EVO_CACHE_REDIS_DB}";
 
-      # Exporta as vars que o Evolution espera (doc oficial)
-      export AUTHENTICATION_API_KEY="$$AUTHENTICATION_API_KEY";
-      export DATABASE_CONNECTION_URI="postgresql://postgres:$$POSTGRES_PASSWORD@$$PG_HOST:5432/evolution_db?schema=evolution_api";
-      export CACHE_REDIS_URI="redis://:$$REDIS_PASSWORD_ENC@$$RD_HOST:6379/$${EVO_CACHE_REDIS_DB}";
+        export AUTHENTICATION_API_KEY="$$AUTHENTICATION_API_KEY";
 
-      # (Opcional, mas recomendado) valida conexão antes
-      node -e "console.log('DB URI host=', process.env.DATABASE_CONNECTION_URI.split('@')[1].split('/')[0])";
+        # Define os dois: o app e o Prisma
+        export DATABASE_CONNECTION_URI="$$DB_URI";
+        export DATABASE_URL="$$DB_URI";
 
-      # Migrations controladas por você (agora com env correto)
-      npm run db:deploy;
+        export CACHE_REDIS_URI="$$REDIS_URI";
 
-      # Start
-      exec npm run start:prod
+        exec npm run start:prod
 
     environment:
       <<: *evolution_env
@@ -92,11 +81,9 @@ secrets:
   evolution_api_key:
     external: true
     name: "${TENANT}_${ENV}_evolution_api_key"
-
   postgres_password:
     external: true
     name: thermas_prod_postgres_password
-
   redis_password:
     external: true
     name: thermas_prod_redis_password
@@ -105,7 +92,6 @@ volumes:
   evolution_instances:
     external: true
     name: "${TENANT}_${ENV}_evolution_instances"
-
   evolution_store:
     external: true
     name: "${TENANT}_${ENV}_evolution_store"
