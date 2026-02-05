@@ -3,25 +3,40 @@ version: "3.7"
 services:
   evolution:
     image: evoapicloud/evolution-api:v2.3.7
-    entrypoint: ["/bin/sh", "-lc"]
     command:
-      - >
-        set -e;
+      - sh
+      - -lc
+      - |
+        set -e
 
-        test -f /run/secrets/postgres_password || { echo "ERROR missing postgres_password"; ls -lah /run/secrets || true; exit 1; };
-        test -f /run/secrets/evolution_api_key || { echo "ERROR missing evolution_api_key"; ls -lah /run/secrets || true; exit 1; };
-        test -f /run/secrets/redis_password || { echo "ERROR missing redis_password"; ls -lah /run/secrets || true; exit 1; };
+        # Secrets (trim para remover \n final)
+        export POSTGRES_PASSWORD="$$(cat /run/secrets/postgres_password | tr -d '\r\n')"
+        export AUTHENTICATION_API_KEY="$$(cat /run/secrets/evolution_api_key | tr -d '\r\n')"
 
-        export POSTGRES_PASSWORD="$$(cat /run/secrets/postgres_password)";
-        export AUTHENTICATION_API_KEY="$$(cat /run/secrets/evolution_api_key)";
+        # Redis: senha tem caracteres reservados, então URL-encode
+        export REDIS_PASSWORD_RAW="$$(cat /run/secrets/redis_password | tr -d '\r\n')"
+        export REDIS_PASSWORD_ENC="$$(node -e "process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/redis_password','utf8').trim()))")"
 
-        export REDIS_PASSWORD_RAW="$$(cat /run/secrets/redis_password)";
-        export REDIS_PASSWORD_ENC="$$(node -e "const fs=require('fs');process.stdout.write(encodeURIComponent(fs.readFileSync(0,'utf8').trim()))" < /run/secrets/redis_password)";
+        # ---- Config principal ----
+        export SERVER_URL="https://${DOMAIN_EVO}"
+        export DOCKER_ENV="true"
 
-        export DATABASE_CONNECTION_URI="postgresql://postgres:$${POSTGRES_PASSWORD}@postgres:5432/evolution?schema=public";
-        export CACHE_REDIS_URI="redis://:$${REDIS_PASSWORD_ENC}@redis:6379/${EVO_CACHE_REDIS_DB}";
+        export AUTHENTICATION_TYPE="apikey"
 
-        exec node ./dist/src/main.js
+        export DATABASE_ENABLED="true"
+        export DATABASE_PROVIDER="postgresql"
+        # Use um DB explícito (recomendo bater com o default que você viu no log)
+        export DATABASE_CONNECTION_URI="postgresql://postgres:$${POSTGRES_PASSWORD}@postgres:5432/evolution_db?schema=evolution_api"
+
+        export CACHE_REDIS_ENABLED="true"
+        export CACHE_REDIS_URI="redis://:$${REDIS_PASSWORD_ENC}@redis:6379/${EVO_CACHE_REDIS_DB}"
+        export CACHE_REDIS_PREFIX_KEY="${EVO_CACHE_PREFIX}"
+        export CACHE_LOCAL_ENABLED="false"
+
+        export LOG_LEVEL="${EVO_LOG_LEVEL}"
+
+        # Start correto do container
+        exec npm run start:prod
 
     networks:
       - edge
@@ -30,21 +45,6 @@ services:
     volumes:
       - evolution_instances:/evolution/instances
       - evolution_store:/evolution/store
-
-    environment:
-      - SERVER_URL=https://${DOMAIN_EVO}
-      - DOCKER_ENV=true
-
-      - AUTHENTICATION_TYPE=apikey
-
-      - DATABASE_ENABLED=true
-      - DATABASE_PROVIDER=postgresql
-
-      - CACHE_REDIS_ENABLED=true
-      - CACHE_REDIS_PREFIX_KEY=${EVO_CACHE_PREFIX}
-      - CACHE_LOCAL_ENABLED=false
-
-      - LOG_LEVEL=${EVO_LOG_LEVEL}
 
     secrets:
       - evolution_api_key
