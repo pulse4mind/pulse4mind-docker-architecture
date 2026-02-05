@@ -3,26 +3,23 @@ version: "3.7"
 services:
   evolution:
     image: evoapicloud/evolution-api:v2.3.7
+    entrypoint: ["/bin/sh", "-lc"]
     command:
-      - sh
-      - -lc
-      - |
-        set -e
+      - >
+        set -e;
 
-        # --- Secrets (obrigatórias) ---
-        test -f /run/secrets/postgres_password || { echo "ERROR missing postgres_password"; ls -lah /run/secrets || true; exit 1; }
-        test -f /run/secrets/redis_password || { echo "ERROR missing redis_password"; ls -lah /run/secrets || true; exit 1; }
-        test -f /run/secrets/evolution_api_key || { echo "ERROR missing evolution_api_key"; ls -lah /run/secrets || true; exit 1; }
+        test -f /run/secrets/postgres_password || { echo "ERROR missing postgres_password"; ls -lah /run/secrets || true; exit 1; };
+        test -f /run/secrets/evolution_api_key || { echo "ERROR missing evolution_api_key"; ls -lah /run/secrets || true; exit 1; };
+        test -f /run/secrets/redis_password || { echo "ERROR missing redis_password"; ls -lah /run/secrets || true; exit 1; };
 
-        export AUTHENTICATION_API_KEY="$$(cat /run/secrets/evolution_api_key)"
+        export POSTGRES_PASSWORD="$$(cat /run/secrets/postgres_password)";
+        export AUTHENTICATION_API_KEY="$$(cat /run/secrets/evolution_api_key)";
 
-        # --- Postgres: senha tem caracteres especiais → URL-encode ---
-        export POSTGRES_PASSWORD_ENC="$$(node -p "encodeURIComponent(require('fs').readFileSync('/run/secrets/postgres_password','utf8').trim())")"
-        export DATABASE_CONNECTION_URI="postgresql://postgres:$${POSTGRES_PASSWORD_ENC}@${POSTGRES_HOST}:${POSTGRES_PORT:-5432}/evolution?schema=public"
+        export REDIS_PASSWORD_RAW="$$(cat /run/secrets/redis_password)";
+        export REDIS_PASSWORD_ENC="$$(node -e "const fs=require('fs');process.stdout.write(encodeURIComponent(fs.readFileSync(0,'utf8').trim()))" < /run/secrets/redis_password)";
 
-        # --- Redis: senha tem caracteres especiais → URL-encode ---
-        export REDIS_PASSWORD_ENC="$$(node -p "encodeURIComponent(require('fs').readFileSync('/run/secrets/redis_password','utf8').trim())")"
-        export CACHE_REDIS_URI="redis://:$${REDIS_PASSWORD_ENC}@${REDIS_HOST}:${REDIS_PORT:-6379}/${EVO_CACHE_REDIS_DB}"
+        export DATABASE_CONNECTION_URI="postgresql://postgres:$${POSTGRES_PASSWORD}@postgres:5432/evolution?schema=public";
+        export CACHE_REDIS_URI="redis://:$${REDIS_PASSWORD_ENC}@redis:6379/${EVO_CACHE_REDIS_DB}";
 
         exec node ./dist/src/main.js
 
@@ -42,10 +39,8 @@ services:
 
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
-      # DATABASE_CONNECTION_URI é exportada no command (runtime)
 
       - CACHE_REDIS_ENABLED=true
-      # CACHE_REDIS_URI é exportada no command (runtime)
       - CACHE_REDIS_PREFIX_KEY=${EVO_CACHE_PREFIX}
       - CACHE_LOCAL_ENABLED=false
 
