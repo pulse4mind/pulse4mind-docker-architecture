@@ -28,54 +28,64 @@ services:
     entrypoint: ["/bin/sh", "-lc"]
     command:
       - |
-        set -eu;
+        set -eu
 
         echo "== Evolution bootstrap starting =="
 
-        # Fail-fast: garante que os secrets existem
-        test -f /run/secrets/postgres_password || { echo "ERROR missing postgres_password"; ls -lah /run/secrets || true; exit 1; };
-        test -f /run/secrets/redis_password || { echo "ERROR missing redis_password"; ls -lah /run/secrets || true; exit 1; };
-        test -f /run/secrets/evolution_api_key || { echo "ERROR missing evolution_api_key"; ls -lah /run/secrets || true; exit 1; };
+        # Garantia de secrets
+        test -f /run/secrets/postgres_password || { echo "ERROR missing postgres_password"; exit 1; }
+        test -f /run/secrets/redis_password || { echo "ERROR missing redis_password"; exit 1; }
+        test -f /run/secrets/evolution_api_key || { echo "ERROR missing evolution_api_key"; exit 1; }
 
-        # Secrets (raw)
-        AUTHENTICATION_API_KEY="$$(cat /run/secrets/evolution_api_key | tr -d '\r\n')";
+        # API Key
+        AUTHENTICATION_API_KEY="$(cat /run/secrets/evolution_api_key | tr -d '\r\n')"
 
-        # URL-encode para senha Postgres/Redis (senha forte com caracteres especiais)
-        POSTGRES_PASSWORD_ENC="$$(node -e "process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/postgres_password','utf8').trim()))")";
-        REDIS_PASSWORD_ENC="$$(node -e "process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/redis_password','utf8').trim()))")";
+        # Encode senha Postgres (senha forte)
+        POSTGRES_PASSWORD_ENC="$(node -e "process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/postgres_password','utf8').trim()))")"
 
-        # Hosts/ports via .env (padrão entre stacks), com fallback seguro
-        PG_HOST="$${POSTGRES_HOST:-postgres}";
-        PG_PORT="$${POSTGRES_PORT:-5432}";
-        RD_HOST="$${REDIS_HOST:-redis}";
-        RD_PORT="$${REDIS_PORT:-6379}";
+        # Encode senha Redis
+        REDIS_PASSWORD_ENC="$(node -e "process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/redis_password','utf8').trim()))")"
 
-        # DB/schema com fallback
-        DB_NAME="$${EVO_DB_NAME:-evolution_db}";
-        DB_SCHEMA="$${EVO_DB_SCHEMA:-evolution_api}";
+        # Hosts
+        PG_HOST="${POSTGRES_HOST:-postgres}"
+        PG_PORT="${POSTGRES_PORT:-5432}"
+        RD_HOST="${REDIS_HOST:-redis}"
+        RD_PORT="${REDIS_PORT:-6379}"
 
-        # URIs (Postgres/Redis com senha ENCODED)
-        DB_URI="postgresql://postgres:$${POSTGRES_PASSWORD_ENC}@$${PG_HOST}:$${PG_PORT}/$${DB_NAME}?schema=$${DB_SCHEMA}";
-        REDIS_URI="redis://:$${REDIS_PASSWORD_ENC}@$${RD_HOST}:$${RD_PORT}/$${EVO_CACHE_REDIS_DB}";
+        # DB
+        DB_NAME="${EVO_DB_NAME:-evolution_db}"
+        DB_SCHEMA="${EVO_DB_SCHEMA:-evolution_api}"
 
-        # Exporta para o app + Prisma
-        export AUTHENTICATION_API_KEY="$$AUTHENTICATION_API_KEY";
-        export DATABASE_CONNECTION_URI="$$DB_URI";
-        export DATABASE_URL="$$DB_URI";
-        export CACHE_REDIS_URI="$$REDIS_URI";
+        # URIs
+        DB_URI="postgresql://postgres:${POSTGRES_PASSWORD_ENC}@${PG_HOST}:${PG_PORT}/${DB_NAME}?schema=${DB_SCHEMA}"
+        REDIS_URI="redis://:${REDIS_PASSWORD_ENC}@${RD_HOST}:${RD_PORT}/${EVO_CACHE_REDIS_DB}"
 
-        # Debug seguro (não imprime senha real)
+        export AUTHENTICATION_API_KEY
+        export DATABASE_URL="$DB_URI"
+        export DATABASE_CONNECTION_URI="$DB_URI"
+        export CACHE_REDIS_URI="$REDIS_URI"
+
         echo "== AFTER EXPORTS (safe) =="
-        echo "PG_HOST=$${PG_HOST} PG_PORT=$${PG_PORT} DB_NAME=$${DB_NAME} DB_SCHEMA=$${DB_SCHEMA}"
-        echo "RD_HOST=$${RD_HOST} RD_PORT=$${RD_PORT} EVO_CACHE_REDIS_DB=$${EVO_CACHE_REDIS_DB}"
-        echo "AUTHENTICATION_API_KEY set? $$([ -n "$${AUTHENTICATION_API_KEY:-}" ] && echo yes || echo no)"
-        echo "DATABASE_URL set? $$([ -n "$${DATABASE_URL:-}" ] && echo yes || echo no)"
-        echo "CACHE_REDIS_URI set? $$([ -n "$${CACHE_REDIS_URI:-}" ] && echo yes || echo no)"
-        echo "DATABASE_URL (redacted)=$$(echo "$$DATABASE_URL" | sed -E 's#(postgresql://[^:]+:)[^@]+(@)#\1***\2#')"
-        echo "CACHE_REDIS_URI (redacted)=$$(echo "$$CACHE_REDIS_URI" | sed -E 's#(redis://:)[^@]+(@)#\1***\2#')"
+        if [ -n "${DATABASE_URL:-}" ]; then
+          echo "DATABASE_URL set? yes"
+        else
+          echo "DATABASE_URL set? no"
+        fi
 
-        # Aplica migrations (idempotente) antes de subir o app
-        echo "== Running migrations (db:deploy) =="
+        if [ -n "${CACHE_REDIS_URI:-}" ]; then
+          echo "CACHE_REDIS_URI set? yes"
+        else
+          echo "CACHE_REDIS_URI set? no"
+        fi
+
+        if [ -n "${AUTHENTICATION_API_KEY:-}" ]; then
+          echo "AUTHENTICATION_API_KEY set? yes"
+        else
+          echo "AUTHENTICATION_API_KEY set? no"
+        fi
+
+        # Migrations (idempotente)
+        echo "== Running migrations =="
         npm run db:deploy
 
         echo "== Starting Evolution =="
@@ -113,10 +123,12 @@ services:
 secrets:
   evolution_api_key:
     external: true
-    name: "thermas_prod_evolution_api_key"
+    name: thermas_prod_evolution_api_key
+
   postgres_password:
     external: true
     name: thermas_prod_postgres_password
+
   redis_password:
     external: true
     name: thermas_prod_redis_password
@@ -124,15 +136,17 @@ secrets:
 volumes:
   evolution_instances:
     external: true
-    name: "thermas_prod_evolution_instances"
+    name: thermas_prod_evolution_instances
+
   evolution_store:
     external: true
-    name: "thermas_prod_evolution_store"
+    name: thermas_prod_evolution_store
 
 networks:
   edge:
     external: true
     name: "${EDGE_NETWORK}"
+
   data:
     external: true
     name: "${DATA_NETWORK}"
