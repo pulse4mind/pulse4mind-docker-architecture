@@ -40,11 +40,9 @@ services:
         # API Key
         AUTHENTICATION_API_KEY="$(cat /run/secrets/evolution_api_key | tr -d '\r\n')"
 
-        # Encode senha Postgres (senha forte)
-        POSTGRES_PASSWORD_ENC="$(node -e "process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/postgres_password','utf8').trim()))")"
-
-        # Encode senha Redis
-        REDIS_PASSWORD_ENC="$(node -e "process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/redis_password','utf8').trim()))")"
+        # Encode senha Postgres/Redis (SEM aspas duplas aninhadas)
+        POSTGRES_PASSWORD_ENC="$(node -e 'process.stdout.write(encodeURIComponent(require("fs").readFileSync("/run/secrets/postgres_password","utf8").trim()))')"
+        REDIS_PASSWORD_ENC="$(node -e 'process.stdout.write(encodeURIComponent(require("fs").readFileSync("/run/secrets/redis_password","utf8").trim()))')"
 
         # Hosts
         PG_HOST="${POSTGRES_HOST:-postgres}"
@@ -66,26 +64,15 @@ services:
         export CACHE_REDIS_URI="$REDIS_URI"
 
         echo "== AFTER EXPORTS (safe) =="
-        if [ -n "${DATABASE_URL:-}" ]; then
-          echo "DATABASE_URL set? yes"
-        else
-          echo "DATABASE_URL set? no"
-        fi
+        echo "PG_HOST=${PG_HOST} PG_PORT=${PG_PORT} DB_NAME=${DB_NAME} DB_SCHEMA=${DB_SCHEMA}"
+        echo "RD_HOST=${RD_HOST} RD_PORT=${RD_PORT} EVO_CACHE_REDIS_DB=${EVO_CACHE_REDIS_DB}"
+        [ -n "${AUTHENTICATION_API_KEY:-}" ] && echo "AUTHENTICATION_API_KEY set? yes" || echo "AUTHENTICATION_API_KEY set? no"
+        [ -n "${DATABASE_URL:-}" ] && echo "DATABASE_URL set? yes" || echo "DATABASE_URL set? no"
+        [ -n "${CACHE_REDIS_URI:-}" ] && echo "CACHE_REDIS_URI set? yes" || echo "CACHE_REDIS_URI set? no"
+        echo "DATABASE_URL (redacted)=$(echo "${DATABASE_URL}" | sed -E 's#(postgresql://[^:]+:)[^@]+(@)#\1***\2#')"
+        echo "CACHE_REDIS_URI (redacted)=$(echo "${CACHE_REDIS_URI}" | sed -E 's#(redis://:)[^@]+(@)#\1***\2#')"
 
-        if [ -n "${CACHE_REDIS_URI:-}" ]; then
-          echo "CACHE_REDIS_URI set? yes"
-        else
-          echo "CACHE_REDIS_URI set? no"
-        fi
-
-        if [ -n "${AUTHENTICATION_API_KEY:-}" ]; then
-          echo "AUTHENTICATION_API_KEY set? yes"
-        else
-          echo "AUTHENTICATION_API_KEY set? no"
-        fi
-
-        # Migrations (idempotente)
-        echo "== Running migrations =="
+        echo "== Running migrations (db:deploy) =="
         npm run db:deploy
 
         echo "== Starting Evolution =="
@@ -112,6 +99,10 @@ services:
       placement:
         constraints:
           - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
       labels:
         - traefik.enable=true
         - traefik.docker.network=${EDGE_NETWORK}
