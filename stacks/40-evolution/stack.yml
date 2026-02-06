@@ -5,81 +5,46 @@ x-evolution-env: &evolution_env
   DOCKER_ENV: "true"
   SERVER_URL: "https://${DOMAIN_EVO}"
 
-  # Autenticação
   AUTHENTICATION_TYPE: "apikey"
 
-  # Banco
   DATABASE_ENABLED: "true"
   DATABASE_PROVIDER: "postgresql"
 
-  # Cache / Redis
   CACHE_REDIS_ENABLED: "true"
   CACHE_LOCAL_ENABLED: "false"
   CACHE_REDIS_PREFIX_KEY: "${EVO_CACHE_PREFIX}"
   EVO_CACHE_REDIS_DB: "${EVO_CACHE_REDIS_DB}"
 
-  # Logs
   LOG_LEVEL: "${EVO_LOG_LEVEL}"
 
 services:
   evolution_api:
     image: evoapicloud/evolution-api:v2.3.7
 
-    entrypoint: ["/bin/sh", "-lc"]
-    command:
-      - |
-        set -eu
+    entrypoint: ["/bin/sh","-c"]
+    command: |
+      echo "== Evolution bootstrap starting =="
 
-        echo "== Evolution bootstrap starting =="
+      export AUTHENTICATION_API_KEY="$(cat /run/secrets/evolution_api_key)"
 
-        # Garantia de secrets
-        test -f /run/secrets/postgres_password || { echo "ERROR missing postgres_password"; exit 1; }
-        test -f /run/secrets/redis_password || { echo "ERROR missing redis_password"; exit 1; }
-        test -f /run/secrets/evolution_api_key || { echo "ERROR missing evolution_api_key"; exit 1; }
+      export DATABASE_CONNECTION_URI="postgresql://postgres:$(cat /run/secrets/postgres_password)@postgres:5432/evolution_db?schema=evolution_api"
+      export DATABASE_URL="$DATABASE_CONNECTION_URI"
 
-        # API Key
-        AUTHENTICATION_API_KEY="$(cat /run/secrets/evolution_api_key | tr -d '\r\n')"
+      export CACHE_REDIS_URI="redis://:$(cat /run/secrets/redis_password)@redis:6379/${EVO_CACHE_REDIS_DB}"
 
-        # Encode senha Postgres/Redis (SEM aspas duplas aninhadas)
-        POSTGRES_PASSWORD_ENC="$(node -e 'process.stdout.write(encodeURIComponent(require("fs").readFileSync("/run/secrets/postgres_password","utf8").trim()))')"
-        REDIS_PASSWORD_ENC="$(node -e 'process.stdout.write(encodeURIComponent(require("fs").readFileSync("/run/secrets/redis_password","utf8").trim()))')"
+      echo "== Running migrations =="
+      npm run db:deploy
 
-        # Hosts
-        PG_HOST="${POSTGRES_HOST:-postgres}"
-        PG_PORT="${POSTGRES_PORT:-5432}"
-        RD_HOST="${REDIS_HOST:-redis}"
-        RD_PORT="${REDIS_PORT:-6379}"
-
-        # DB
-        DB_NAME="${EVO_DB_NAME:-evolution_db}"
-        DB_SCHEMA="${EVO_DB_SCHEMA:-evolution_api}"
-
-        # URIs
-        DB_URI="postgresql://postgres:${POSTGRES_PASSWORD_ENC}@${PG_HOST}:${PG_PORT}/${DB_NAME}?schema=${DB_SCHEMA}"
-        REDIS_URI="redis://:${REDIS_PASSWORD_ENC}@${RD_HOST}:${RD_PORT}/${EVO_CACHE_REDIS_DB}"
-
-        export AUTHENTICATION_API_KEY
-        export DATABASE_URL="$DB_URI"
-        export DATABASE_CONNECTION_URI="$DB_URI"
-        export CACHE_REDIS_URI="$REDIS_URI"
-
-        echo "== AFTER EXPORTS (safe) =="
-        echo "PG_HOST=${PG_HOST} PG_PORT=${PG_PORT} DB_NAME=${DB_NAME} DB_SCHEMA=${DB_SCHEMA}"
-        echo "RD_HOST=${RD_HOST} RD_PORT=${RD_PORT} EVO_CACHE_REDIS_DB=${EVO_CACHE_REDIS_DB}"
-        [ -n "${AUTHENTICATION_API_KEY:-}" ] && echo "AUTHENTICATION_API_KEY set? yes" || echo "AUTHENTICATION_API_KEY set? no"
-        [ -n "${DATABASE_URL:-}" ] && echo "DATABASE_URL set? yes" || echo "DATABASE_URL set? no"
-        [ -n "${CACHE_REDIS_URI:-}" ] && echo "CACHE_REDIS_URI set? yes" || echo "CACHE_REDIS_URI set? no"
-        echo "DATABASE_URL (redacted)=$(echo "${DATABASE_URL}" | sed -E 's#(postgresql://[^:]+:)[^@]+(@)#\1***\2#')"
-        echo "CACHE_REDIS_URI (redacted)=$(echo "${CACHE_REDIS_URI}" | sed -E 's#(redis://:)[^@]+(@)#\1***\2#')"
-
-        echo "== Running migrations (db:deploy) =="
-        npm run db:deploy
-
-        echo "== Starting Evolution =="
-        exec npm run start:prod
+      echo "== Starting Evolution =="
+      exec npm run start:prod
 
     environment:
       <<: *evolution_env
+
+    secrets:
+      - evolution_api_key
+      - postgres_password
+      - redis_password
 
     networks:
       - edge
@@ -89,27 +54,11 @@ services:
       - evolution_instances:/evolution/instances
       - evolution_store:/evolution/store
 
-    secrets:
-      - evolution_api_key
-      - postgres_password
-      - redis_password
-
     deploy:
       replicas: 1
       placement:
         constraints:
           - node.role == manager
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 10
-      labels:
-        - traefik.enable=true
-        - traefik.docker.network=${EDGE_NETWORK}
-        - traefik.http.routers.evolution.rule=Host(`${DOMAIN_EVO}`)
-        - traefik.http.routers.evolution.entrypoints=websecure
-        - traefik.http.routers.evolution.tls.certresolver=letsencryptresolver
-        - traefik.http.services.evolution.loadbalancer.server.port=8080
 
 secrets:
   evolution_api_key:
