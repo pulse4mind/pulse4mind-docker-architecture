@@ -28,23 +28,31 @@ services:
         test -f /run/secrets/postgres_password || { echo "ERROR missing postgres_password"; ls -lah /run/secrets || true; sleep 600; exit 1; };
         test -f /run/secrets/redis_password || { echo "ERROR missing redis_password"; ls -lah /run/secrets || true; sleep 600; exit 1; };
         test -f /run/secrets/evolution_api_key || { echo "ERROR missing evolution_api_key"; ls -lah /run/secrets || true; sleep 600; exit 1; };
+
         AUTHENTICATION_API_KEY="$$(cat /run/secrets/evolution_api_key | tr -d '\r\n')";
+
         POSTGRES_PASSWORD_ENC="$$(node -e "process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/postgres_password','utf8').trim()))")";
         REDIS_PASSWORD_ENC="$$(node -e "process.stdout.write(encodeURIComponent(require('fs').readFileSync('/run/secrets/redis_password','utf8').trim()))")";
+
         PG_HOST="$${POSTGRES_HOST:-postgres}";
         PG_PORT="$${POSTGRES_PORT:-5432}";
         RD_HOST="$${REDIS_HOST:-redis}";
         RD_PORT="$${REDIS_PORT:-6379}";
+
         DB_NAME="$${EVO_DB_NAME:-evolution_db}";
         DB_SCHEMA="$${EVO_DB_SCHEMA:-evolution_api}";
+
         DB_URI="postgresql://postgres:$${POSTGRES_PASSWORD_ENC}@$${PG_HOST}:$${PG_PORT}/$${DB_NAME}?schema=$${DB_SCHEMA}";
         REDIS_URI="redis://:$${REDIS_PASSWORD_ENC}@$${RD_HOST}:$${RD_PORT}/$${EVO_CACHE_REDIS_DB}";
+
         export AUTHENTICATION_API_KEY="$$AUTHENTICATION_API_KEY";
         export DATABASE_CONNECTION_URI="$$DB_URI";
         export DATABASE_URL="$$DB_URI";
         export CACHE_REDIS_URI="$$REDIS_URI";
+
         echo "== Running migrations (db:deploy) ==";
         npm run db:deploy || { echo "ERROR: db:deploy failed"; sleep 600; exit 1; };
+
         echo "== Starting Evolution ==";
         exec npm run start:prod
 
@@ -87,21 +95,21 @@ services:
 secrets:
   evolution_api_key:
     external: true
-    name: thermas_prod_evolution_api_key
+    name: "${TENANT}_${ENV}_evolution_api_key"
   postgres_password:
     external: true
-    name: thermas_prod_postgres_password
+    name: "${TENANT}_${ENV}_postgres_password"
   redis_password:
     external: true
-    name: thermas_prod_redis_password
+    name: "${TENANT}_${ENV}_redis_password"
 
 volumes:
   evolution_instances:
     external: true
-    name: thermas_prod_evolution_instances
+    name: "${TENANT}_${ENV}_evolution_instances"
   evolution_store:
     external: true
-    name: thermas_prod_evolution_store
+    name: "${TENANT}_${ENV}_evolution_store"
 
 networks:
   edge:
