@@ -31,7 +31,6 @@ x-n8n-env: &n8n_env
 
   # >>> ajustes necessários segundo os logs <<<
   N8N_RUNNERS_ENABLED: "true"
-  OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS: "true"
 
 services:
   n8n_editor:
