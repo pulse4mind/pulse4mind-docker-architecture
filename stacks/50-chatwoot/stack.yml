@@ -36,7 +36,7 @@ x-n8n-env: &n8n_env
 
 services:
   n8n_editor:
-    image: n8nio/n8n:1.90.2
+    image: n8nio/n8n:2.6.4
     networks:
       - edge
       - data
@@ -63,7 +63,7 @@ services:
         - traefik.http.services.n8n_editor.loadbalancer.server.port=5678
 
   n8n_webhook:
-    image: n8nio/n8n:1.90.2
+    image: n8nio/n8n:2.6.4
     networks:
       - edge
       - data
@@ -91,7 +91,7 @@ services:
         - traefik.http.services.n8n_webhook.loadbalancer.server.port=5678
 
   n8n_worker:
-    image: n8nio/n8n:1.90.2
+    image: n8nio/n8n:2.6.4
     networks:
       - data
     environment:
