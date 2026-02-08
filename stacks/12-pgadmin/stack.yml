@@ -16,7 +16,7 @@ services:
       - pgadmin_data:/var/lib/pgadmin
 
     networks:
-      - traefik_public
+      - edge
 
     deploy:
       replicas: 1
@@ -25,20 +25,19 @@ services:
           - node.role == manager
       labels:
         - traefik.enable=true
-        - traefik.docker.network=traefik_public
+        - traefik.docker.network=${EDGE_NETWORK}
 
-        # 🌐 Router HTTPS
         - traefik.http.routers.pgadmin.rule=Host(`${DNS_PREFIX}.pgadmin.${BASE_DOMAIN}`)
         - traefik.http.routers.pgadmin.entrypoints=websecure
         - traefik.http.routers.pgadmin.tls=true
-        - traefik.http.routers.pgadmin.tls.certresolver=le
+        - traefik.http.routers.pgadmin.tls.certresolver=letsencryptresolver
 
-        # 🔌 Service
         - traefik.http.services.pgadmin.loadbalancer.server.port=80
 
 networks:
-  traefik_public:
+  edge:
     external: true
+    name: "${EDGE_NETWORK}"
 
 secrets:
   pgadmin_password:
