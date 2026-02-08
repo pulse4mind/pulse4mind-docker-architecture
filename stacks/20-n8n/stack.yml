@@ -2,62 +2,49 @@ version: "3.7"
 
 x-n8n-env: &n8n_env
   DB_TYPE: postgresdb
-  DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME}
-  DB_POSTGRESDB_HOST: ${POSTGRES_HOST}
-  DB_POSTGRESDB_PORT: "${POSTGRES_PORT}"
-  DB_POSTGRESDB_USER: ${N8N_DB_USER}
+  DB_POSTGRESDB_DATABASE: n8n_queue
+  DB_POSTGRESDB_HOST: postgres
+  DB_POSTGRESDB_PORT: "5432"
+  DB_POSTGRESDB_USER: postgres
   DB_POSTGRESDB_PASSWORD_FILE: /run/secrets/postgres_password
 
-  # Hostname derivado do padrão B
-  N8N_HOST: ${DNS_PREFIX}.n8n.${BASE_DOMAIN}
+  N8N_HOST: thermas.n8n.pulse4mind.com
   N8N_PROTOCOL: https
-  N8N_EDITOR_BASE_URL: https://${DNS_PREFIX}.n8n.${BASE_DOMAIN}
-  WEBHOOK_URL: https://${DNS_PREFIX}.n8n.${BASE_DOMAIN}/
+  N8N_EDITOR_BASE_URL: https://thermas.n8n.pulse4mind.com
+  WEBHOOK_URL: https://thermas.n8n.pulse4mind.com/
 
   NODE_ENV: production
 
   EXECUTIONS_MODE: queue
-  QUEUE_BULL_REDIS_HOST: ${REDIS_HOST}
-  QUEUE_BULL_REDIS_PORT: "${REDIS_PORT}"
-  QUEUE_BULL_REDIS_DB: "${N8N_QUEUE_REDIS_DB}"
+  QUEUE_BULL_REDIS_HOST: redis
+  QUEUE_BULL_REDIS_PORT: "6379"
+  QUEUE_BULL_REDIS_DB: "2"
 
-  NODE_FUNCTION_ALLOW_EXTERNAL: ${N8N_NODE_FUNCTION_ALLOW_EXTERNAL}
   EXECUTIONS_DATA_PRUNE: "true"
-  EXECUTIONS_DATA_MAX_AGE: "${N8N_EXECUTIONS_DATA_MAX_AGE}"
-  GENERIC_TIMEZONE: ${TZ}
-  TZ: ${TZ}
+  EXECUTIONS_DATA_MAX_AGE: "336"
+  GENERIC_TIMEZONE: America/Sao_Paulo
+  TZ: America/Sao_Paulo
 
   N8N_LOG_LEVEL: info
   N8N_DIAGNOSTICS_ENABLED: "false"
   N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
 
-  # Recomendados pelos warnings (deprecations)
+  # >>> ajustes necessários segundo os logs <<<
   N8N_RUNNERS_ENABLED: "true"
   OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS: "true"
 
 services:
   n8n_editor:
     image: n8nio/n8n:2.6.4
-    entrypoint: ["/bin/sh", "-lc"]
-    command:
-      - "set -e;
-        test -f /run/secrets/n8n_encryption_key || { echo 'ERROR missing n8n_encryption_key'; ls -lah /run/secrets || true; exit 1; };
-        test -f /run/secrets/redis_password     || { echo 'ERROR missing redis_password';     ls -lah /run/secrets || true; exit 1; };
-        export N8N_ENCRYPTION_KEY=\"$$(cat /run/secrets/n8n_encryption_key)\";
-        export QUEUE_BULL_REDIS_PASSWORD=\"$$(cat /run/secrets/redis_password)\";
-        exec n8n start"
     networks:
       - edge
       - data
     environment:
       <<: *n8n_env
     secrets:
-      - source: postgres_password
-        target: postgres_password
-      - source: n8n_encryption_key
-        target: n8n_encryption_key
-      - source: redis_password
-        target: redis_password
+      - postgres_password
+      - redis_password
+      - n8n_encryption_key
     volumes:
       - n8n_data:/home/node/.n8n
       - n8n_files:/files
@@ -68,34 +55,23 @@ services:
           - node.role == manager
       labels:
         - traefik.enable=true
-        - traefik.docker.network=${EDGE_NETWORK}
-        - traefik.http.routers.n8n_editor.rule=Host(`${DNS_PREFIX}.n8n.${BASE_DOMAIN}`)
+        - traefik.docker.network=net_edge
+        - traefik.http.routers.n8n_editor.rule=Host(`thermas.n8n.pulse4mind.com`)
         - traefik.http.routers.n8n_editor.entrypoints=websecure
         - traefik.http.routers.n8n_editor.tls.certresolver=letsencryptresolver
         - traefik.http.services.n8n_editor.loadbalancer.server.port=5678
 
   n8n_webhook:
     image: n8nio/n8n:2.6.4
-    entrypoint: ["/bin/sh", "-lc"]
-    command:
-      - "set -e;
-        test -f /run/secrets/n8n_encryption_key || { echo 'ERROR missing n8n_encryption_key'; ls -lah /run/secrets || true; exit 1; };
-        test -f /run/secrets/redis_password     || { echo 'ERROR missing redis_password';     ls -lah /run/secrets || true; exit 1; };
-        export N8N_ENCRYPTION_KEY=\"$$(cat /run/secrets/n8n_encryption_key)\";
-        export QUEUE_BULL_REDIS_PASSWORD=\"$$(cat /run/secrets/redis_password)\";
-        exec n8n webhook"
     networks:
       - edge
       - data
     environment:
       <<: *n8n_env
     secrets:
-      - source: postgres_password
-        target: postgres_password
-      - source: n8n_encryption_key
-        target: n8n_encryption_key
-      - source: redis_password
-        target: redis_password
+      - postgres_password
+      - redis_password
+      - n8n_encryption_key
     volumes:
       - n8n_data:/home/node/.n8n
       - n8n_files:/files
@@ -106,8 +82,8 @@ services:
           - node.role == manager
       labels:
         - traefik.enable=true
-        - traefik.docker.network=${EDGE_NETWORK}
-        - traefik.http.routers.n8n_webhook.rule=Host(`${DNS_PREFIX}.n8n.${BASE_DOMAIN}`) && (PathPrefix(`/webhook`) || PathPrefix(`/webhook-test`))
+        - traefik.docker.network=net_edge
+        - traefik.http.routers.n8n_webhook.rule=Host(`thermas.n8n.pulse4mind.com`) && (PathPrefix(`/webhook`) || PathPrefix(`/webhook-test`))
         - traefik.http.routers.n8n_webhook.entrypoints=websecure
         - traefik.http.routers.n8n_webhook.priority=10
         - traefik.http.routers.n8n_webhook.tls.certresolver=letsencryptresolver
@@ -115,25 +91,14 @@ services:
 
   n8n_worker:
     image: n8nio/n8n:2.6.4
-    entrypoint: ["/bin/sh", "-lc"]
-    command:
-      - "set -e;
-        test -f /run/secrets/n8n_encryption_key || { echo 'ERROR missing n8n_encryption_key'; ls -lah /run/secrets || true; exit 1; };
-        test -f /run/secrets/redis_password     || { echo 'ERROR missing redis_password';     ls -lah /run/secrets || true; exit 1; };
-        export N8N_ENCRYPTION_KEY=\"$$(cat /run/secrets/n8n_encryption_key)\";
-        export QUEUE_BULL_REDIS_PASSWORD=\"$$(cat /run/secrets/redis_password)\";
-        exec n8n worker --concurrency=10"
     networks:
       - data
     environment:
       <<: *n8n_env
     secrets:
-      - source: postgres_password
-        target: postgres_password
-      - source: n8n_encryption_key
-        target: n8n_encryption_key
-      - source: redis_password
-        target: redis_password
+      - postgres_password
+      - redis_password
+      - n8n_encryption_key
     volumes:
       - n8n_data:/home/node/.n8n
       - n8n_files:/files
@@ -146,26 +111,26 @@ services:
 secrets:
   postgres_password:
     external: true
-    name: "${STACK_PREFIX}_postgres_password"
-  n8n_encryption_key:
-    external: true
-    name: "${STACK_PREFIX}_n8n_encryption_key"
+    name: thermas_prod_postgres_password
   redis_password:
     external: true
-    name: "${STACK_PREFIX}_redis_password"
+    name: thermas_prod_redis_password
+  n8n_encryption_key:
+    external: true
+    name: thermas_prod_n8n_encryption_key
 
 volumes:
   n8n_data:
     external: true
-    name: "${STACK_PREFIX}_n8n_data"
+    name: thermas_prod_n8n_data
   n8n_files:
     external: true
-    name: "${STACK_PREFIX}_n8n_files"
+    name: thermas_prod_n8n_files
 
 networks:
   edge:
     external: true
-    name: "${EDGE_NETWORK}"
+    name: net_edge
   data:
     external: true
-    name: "${DATA_NETWORK}"
+    name: net_data
