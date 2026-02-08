@@ -8,11 +8,13 @@ x-n8n-env: &n8n_env
   DB_POSTGRESDB_USER: ${N8N_DB_USER}
   DB_POSTGRESDB_PASSWORD_FILE: /run/secrets/postgres_password
 
-  N8N_HOST: ${DOMAIN_N8N}
-  N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL}
+  # Hostname derivado do padrão B
+  N8N_HOST: ${DNS_PREFIX}.n8n.${BASE_DOMAIN}
   N8N_PROTOCOL: https
+  N8N_EDITOR_BASE_URL: https://${DNS_PREFIX}.n8n.${BASE_DOMAIN}
+  WEBHOOK_URL: https://${DNS_PREFIX}.n8n.${BASE_DOMAIN}/
+
   NODE_ENV: production
-  WEBHOOK_URL: ${N8N_WEBHOOK_URL}
 
   EXECUTIONS_MODE: queue
   QUEUE_BULL_REDIS_HOST: ${REDIS_HOST}
@@ -47,6 +49,9 @@ services:
         target: n8n_encryption_key
       - source: redis_password
         target: redis_password
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - n8n_files:/files
     deploy:
       replicas: 1
       placement:
@@ -55,7 +60,7 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=${EDGE_NETWORK}
-        - traefik.http.routers.n8n_editor.rule=Host(`${DOMAIN_N8N}`)
+        - traefik.http.routers.n8n_editor.rule=Host(`${DNS_PREFIX}.n8n.${BASE_DOMAIN}`)
         - traefik.http.routers.n8n_editor.entrypoints=websecure
         - traefik.http.routers.n8n_editor.tls.certresolver=letsencryptresolver
         - traefik.http.services.n8n_editor.loadbalancer.server.port=5678
@@ -77,6 +82,9 @@ services:
         target: n8n_encryption_key
       - source: redis_password
         target: redis_password
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - n8n_files:/files
     deploy:
       replicas: 2
       placement:
@@ -85,7 +93,7 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=${EDGE_NETWORK}
-        - traefik.http.routers.n8n_webhook.rule=Host(`${DOMAIN_N8N}`) && (PathPrefix(`/webhook`) || PathPrefix(`/webhook-test`))
+        - traefik.http.routers.n8n_webhook.rule=Host(`${DNS_PREFIX}.n8n.${BASE_DOMAIN}`) && (PathPrefix(`/webhook`) || PathPrefix(`/webhook-test`))
         - traefik.http.routers.n8n_webhook.entrypoints=websecure
         - traefik.http.routers.n8n_webhook.priority=10
         - traefik.http.routers.n8n_webhook.tls.certresolver=letsencryptresolver
@@ -107,6 +115,9 @@ services:
         target: n8n_encryption_key
       - source: redis_password
         target: redis_password
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - n8n_files:/files
     deploy:
       replicas: 1
       placement:
@@ -116,13 +127,21 @@ services:
 secrets:
   postgres_password:
     external: true
-    name: "thermas_prod_postgres_password"
+    name: "${STACK_PREFIX}_postgres_password"
   n8n_encryption_key:
     external: true
-    name: "thermas_prod_n8n_encryption_key"
+    name: "${STACK_PREFIX}_n8n_encryption_key"
   redis_password:
     external: true
-    name: "thermas_prod_redis_password"
+    name: "${STACK_PREFIX}_redis_password"
+
+volumes:
+  n8n_data:
+    external: true
+    name: "${STACK_PREFIX}_n8n_data"
+  n8n_files:
+    external: true
+    name: "${STACK_PREFIX}_n8n_files"
 
 networks:
   edge:
