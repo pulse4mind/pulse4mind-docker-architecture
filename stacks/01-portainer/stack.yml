@@ -5,7 +5,7 @@ services:
     image: portainer/portainer-ce:2.20.3
     command: ["--http-enabled"]
     volumes:
-      - ${TENANT}_${ENV}_portainer_data:/data
+      - portainer_data:/data
     networks:
       - net_edge
     deploy:
@@ -37,8 +37,9 @@ services:
       - /var/lib/docker/volumes:/var/lib/docker/volumes
 
 volumes:
-  ${TENANT}_${ENV}_portainer_data:
+  portainer_data:
     external: true
+    name: "${TENANT}_${ENV}_portainer_data"
 
 networks:
   net_edge:
