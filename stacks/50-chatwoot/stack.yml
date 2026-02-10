@@ -6,19 +6,20 @@ x-chatwoot-env: &chatwoot_env
   RAILS_ENV: production
   INSTALLATION_ENV: docker
 
-  # ✅ Derivado no YAML (não depende de FRONTEND_URL no .env)
+  # DNS dinâmico (não depende de FRONTEND_URL no .env)
   FRONTEND_URL: "https://${DNS_PREFIX}.chat.${BASE_DOMAIN}"
   FORCE_SSL: ${FORCE_SSL}
 
   ENABLE_ACCOUNT_SIGNUP: "${CHATWOOT_ENABLE_SIGNUP}"
   DEFAULT_LOCALE: ${CHATWOOT_DEFAULT_LOCALE}
 
-  # Mantemos por compatibilidade (algumas rotinas do app usam essas vars)
+  # Postgres (mantidos por compatibilidade, mas a fonte de verdade será DATABASE_URL)
   POSTGRES_HOST: postgres_postgres
   POSTGRES_USERNAME: ${CHATWOOT_POSTGRES_USER}
   POSTGRES_DATABASE: ${CHATWOOT_POSTGRES_DB}
 
-  # NÃO setar REDIS_URL aqui, vamos montar via command lendo secret + URL-encoding
+  # Redis URL será montado no command (com URL-encoding)
+  # REDIS_URL: (não setar aqui)
 
   MAILER_SENDER_EMAIL: ${CHATWOOT_MAILER_SENDER}
   MAILER_INBOUND_EMAIL_DOMAIN: ${MAILER_INBOUND_EMAIL_DOMAIN}
@@ -40,22 +41,21 @@ services:
       - |
         set -e
 
-        export SECRET_KEY_BASE="$$(cat /run/secrets/chatwoot_secret_key_base)";
-        export POSTGRES_PASSWORD_RAW="$$(cat /run/secrets/postgres_password)";
-        export SMTP_PASSWORD="$$(cat /run/secrets/smtp_password)";
+        export SECRET_KEY_BASE="$$(cat /run/secrets/chatwoot_secret_key_base)"
+        export SMTP_PASSWORD="$$(cat /run/secrets/smtp_password)"
 
-        # ✅ URL-encode de senhas (Postgres e Redis) para evitar quebra de YAML / URLs
-        export POSTGRES_PASSWORD_ENC="$$(ruby -ruri -e 'print URI.encode_www_form_component(STDIN.read)' < /run/secrets/postgres_password)";
-        export REDIS_PASSWORD_ENC="$$(ruby -ruri -e 'print URI.encode_www_form_component(STDIN.read)' < /run/secrets/redis_password)";
+        # URL-encode das senhas (e remove newline do secret)
+        export POSTGRES_PASSWORD_ENC="$$(ruby -ruri -e 'print URI.encode_www_form_component(STDIN.read.strip)' < /run/secrets/postgres_password)"
+        export REDIS_PASSWORD_ENC="$$(ruby -ruri -e 'print URI.encode_www_form_component(STDIN.read.strip)' < /run/secrets/redis_password)"
 
-        # ✅ Evita o Rails/Psych quebrar ao tentar parsear database.yml com caracteres reservados
-        # Usa DATABASE_URL como fonte de verdade
-        export DATABASE_URL="postgresql://$${POSTGRES_USERNAME}:$${POSTGRES_PASSWORD_ENC}@$${POSTGRES_HOST}:5432/$${POSTGRES_DATABASE}";
+        # ✅ Fonte de verdade do DB: evita parse/YAML/URI quebrado
+        # IMPORTANTe: usar postgres:// (não postgresql://) no seu runtime
+        export DATABASE_URL="postgres://$${POSTGRES_USERNAME}:$${POSTGRES_PASSWORD_ENC}@$${POSTGRES_HOST}:5432/$${POSTGRES_DATABASE}"
 
-        export REDIS_URL="redis://:$${REDIS_PASSWORD_ENC}@redis_redis:6379/0";
+        export REDIS_URL="redis://:$${REDIS_PASSWORD_ENC}@redis_redis:6379/0"
 
-        # Prepara DB (idempotente) antes de subir o web
-        bundle exec rails db:chatwoot_prepare;
+        # Prepara DB (idempotente)
+        bundle exec rails db:chatwoot_prepare
 
         exec bundle exec rails s -p 3000 -b 0.0.0.0
     volumes:
@@ -76,11 +76,8 @@ services:
           - node.role == manager
       labels:
         - traefik.enable=true
-
-        # ✅ ganho preservado: fixa a network que o Traefik usa
         - traefik.docker.network=${EDGE_NETWORK}
 
-        # ✅ Derivado no YAML (não depende de DOMAIN_CHAT no .env)
         - traefik.http.routers.chatwoot.rule=Host(`${DNS_PREFIX}.chat.${BASE_DOMAIN}`)
         - traefik.http.routers.chatwoot.entrypoints=websecure
         - traefik.http.routers.chatwoot.tls.certresolver=letsencryptresolver
@@ -98,15 +95,14 @@ services:
       - |
         set -e
 
-        export SECRET_KEY_BASE="$$(cat /run/secrets/chatwoot_secret_key_base)";
-        export POSTGRES_PASSWORD_RAW="$$(cat /run/secrets/postgres_password)";
-        export SMTP_PASSWORD="$$(cat /run/secrets/smtp_password)";
+        export SECRET_KEY_BASE="$$(cat /run/secrets/chatwoot_secret_key_base)"
+        export SMTP_PASSWORD="$$(cat /run/secrets/smtp_password)"
 
-        export POSTGRES_PASSWORD_ENC="$$(ruby -ruri -e 'print URI.encode_www_form_component(STDIN.read)' < /run/secrets/postgres_password)";
-        export REDIS_PASSWORD_ENC="$$(ruby -ruri -e 'print URI.encode_www_form_component(STDIN.read)' < /run/secrets/redis_password)";
+        export POSTGRES_PASSWORD_ENC="$$(ruby -ruri -e 'print URI.encode_www_form_component(STDIN.read.strip)' < /run/secrets/postgres_password)"
+        export REDIS_PASSWORD_ENC="$$(ruby -ruri -e 'print URI.encode_www_form_component(STDIN.read.strip)' < /run/secrets/redis_password)"
 
-        export DATABASE_URL="postgresql://$${POSTGRES_USERNAME}:$${POSTGRES_PASSWORD_ENC}@$${POSTGRES_HOST}:5432/$${POSTGRES_DATABASE}";
-        export REDIS_URL="redis://:$${REDIS_PASSWORD_ENC}@redis_redis:6379/0";
+        export DATABASE_URL="postgres://$${POSTGRES_USERNAME}:$${POSTGRES_PASSWORD_ENC}@$${POSTGRES_HOST}:5432/$${POSTGRES_DATABASE}"
+        export REDIS_URL="redis://:$${REDIS_PASSWORD_ENC}@redis_redis:6379/0"
 
         exec bundle exec sidekiq -C config/sidekiq.yml
     volumes:
