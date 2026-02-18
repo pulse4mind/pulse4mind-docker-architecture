@@ -1,0 +1,68 @@
+version: "3.7"
+
+x-redisinsight-env: &redisinsight_env
+  TZ: ${TZ}
+
+services:
+  redisinsight:
+    image: redis/redisinsight:latest
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - |
+        set -e;
+
+        # Fail-fast (padrão do projeto)
+        test -f /run/secrets/redisinsight_encryption_key || {
+          echo 'ERROR missing redisinsight_encryption_key';
+          ls -lah /run/secrets || true;
+          exit 1;
+        };
+
+        export RI_ENCRYPTION_KEY="$$(cat /run/secrets/redisinsight_encryption_key)";
+        exec /entrypoint.sh
+    volumes:
+      - redisinsight_data:/data
+    networks:
+      - edge
+      - data
+    environment:
+      <<: *redisinsight_env
+    secrets:
+      - source: redisinsight_encryption_key
+        target: redisinsight_encryption_key
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+
+        # padrão: fixa a network usada pelo Traefik
+        - traefik.docker.network=${EDGE_NETWORK}
+
+        # padrão: DNS derivado no YAML
+        - traefik.http.routers.redisinsight.rule=Host(`${TENANT}.redisinsight.${BASE_DOMAIN}`)
+        - traefik.http.routers.redisinsight.entrypoints=websecure
+        - traefik.http.routers.redisinsight.tls.certresolver=letsencryptresolver
+
+        # RedisInsight default port
+        - traefik.http.services.redisinsight.loadbalancer.server.port=5540
+
+secrets:
+  redisinsight_encryption_key:
+    external: true
+    name: "${STACK_PREFIX}_redisinsight_encryption_key"
+
+volumes:
+  redisinsight_data:
+    external: true
+    name: "${STACK_PREFIX}_redisinsight_data"
+
+networks:
+  edge:
+    external: true
+    name: "${EDGE_NETWORK}"
+  data:
+    external: true
+    name: "${DATA_NETWORK}"
