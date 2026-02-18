@@ -4,8 +4,8 @@ services:
   postgres:
     image: pgvector/pgvector:pg14
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_DB=postgres
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
     secrets:
       - postgres_password
@@ -14,7 +14,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -h 127.0.0.1 || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -h 127.0.0.1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,12 +31,12 @@ services:
 secrets:
   postgres_password:
     external: true
-    name: "${TENANT}_${ENV}_postgres_password"
+    name: "${STACK_PREFIX}_postgres_password"
 
 volumes:
   postgres_data:
     external: true
-    name: "${TENANT}_${ENV}_postgres_data"
+    name: "${STACK_PREFIX}_postgres_data"
 
 networks:
   data:
