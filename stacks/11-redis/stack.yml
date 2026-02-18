@@ -1,4 +1,4 @@
-version: "3.8"
+version: "3.7"
 
 services:
   redis:
@@ -15,6 +15,15 @@ services:
       - sh
       - -lc
       - |
+        set -e;
+
+        # Fail-fast (padrão)
+        test -f /run/secrets/redis_password || {
+          echo "ERROR missing redis_password";
+          ls -lah /run/secrets || true;
+          exit 1;
+        };
+
         exec redis-server \
           --appendonly yes \
           --port 6379 \
@@ -56,14 +65,14 @@ services:
 secrets:
   redis_password:
     external: true
-    name: thermas_prod_redis_password
+    name: "${STACK_PREFIX}_redis_password"
 
 volumes:
   redis_data:
     external: true
-    name: thermas_prod_redis_data
+    name: "${STACK_PREFIX}_redis_data"
 
 networks:
   data:
     external: true
-    name: net_data
+    name: "${DATA_NETWORK}"
