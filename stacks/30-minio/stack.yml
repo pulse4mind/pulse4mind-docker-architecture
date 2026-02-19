@@ -13,9 +13,9 @@ services:
       - MINIO_ROOT_USER_FILE=/run/secrets/minio_root_user
       - MINIO_ROOT_PASSWORD_FILE=/run/secrets/minio_root_password
 
-      # Padronização: DNS derivado no YAML
-      - MINIO_BROWSER_REDIRECT_URL=https://${TENANT}.minio.${BASE_DOMAIN}
-      - MINIO_SERVER_URL=https://${TENANT}.s3.${BASE_DOMAIN}
+      # ✅ DNS derivado no YAML (protocolo: DNS_PREFIX)
+      - MINIO_BROWSER_REDIRECT_URL=https://${DNS_PREFIX}.minio.${BASE_DOMAIN}
+      - MINIO_SERVER_URL=https://${DNS_PREFIX}.s3.${BASE_DOMAIN}
 
     secrets:
       - minio_root_user
@@ -29,14 +29,14 @@ services:
         - traefik.docker.network=${EDGE_NETWORK}
 
         # API S3
-        - traefik.http.routers.minio_s3.rule=Host(`${TENANT}.s3.${BASE_DOMAIN}`)
+        - traefik.http.routers.minio_s3.rule=Host(`${DNS_PREFIX}.s3.${BASE_DOMAIN}`)
         - traefik.http.routers.minio_s3.entrypoints=websecure
         - traefik.http.routers.minio_s3.tls.certresolver=letsencryptresolver
         - traefik.http.services.minio_s3.loadbalancer.server.port=9000
         - traefik.http.routers.minio_s3.service=minio_s3
 
         # Console
-        - traefik.http.routers.minio_console.rule=Host(`${TENANT}.minio.${BASE_DOMAIN}`)
+        - traefik.http.routers.minio_console.rule=Host(`${DNS_PREFIX}.minio.${BASE_DOMAIN}`)
         - traefik.http.routers.minio_console.entrypoints=websecure
         - traefik.http.routers.minio_console.tls.certresolver=letsencryptresolver
         - traefik.http.services.minio_console.loadbalancer.server.port=9001
@@ -46,6 +46,7 @@ secrets:
   minio_root_user:
     external: true
     name: "${STACK_PREFIX}_minio_root_user"
+
   minio_root_password:
     external: true
     name: "${STACK_PREFIX}_minio_root_password"
