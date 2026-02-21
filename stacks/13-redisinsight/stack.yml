@@ -19,7 +19,9 @@ services:
         };
 
         export RI_ENCRYPTION_KEY="$$(cat /run/secrets/redisinsight_encryption_key)";
-        exec /entrypoint.sh
+
+        # RedisInsight image entrypoint
+        exec /usr/local/bin/docker-entrypoint.sh
     volumes:
       - redisinsight_data:/data
     networks:
@@ -36,16 +38,10 @@ services:
           - node.role == manager
       labels:
         - traefik.enable=true
-
-        # ✅ padrão: fixa a network usada pelo Traefik
         - traefik.docker.network=${EDGE_NETWORK}
-
-        # ✅ padrão: DNS derivado no YAML (DNS_PREFIX, não TENANT)
         - traefik.http.routers.redisinsight.rule=Host(`${DNS_PREFIX}.redisinsight.${BASE_DOMAIN}`)
         - traefik.http.routers.redisinsight.entrypoints=websecure
         - traefik.http.routers.redisinsight.tls.certresolver=letsencryptresolver
-
-        # RedisInsight default port
         - traefik.http.services.redisinsight.loadbalancer.server.port=5540
 
 secrets:
