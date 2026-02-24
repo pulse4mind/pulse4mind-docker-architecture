@@ -10,6 +10,8 @@ x-evolution-env: &evolution_env
   DATABASE_ENABLED: "true"
   DATABASE_PROVIDER: "postgresql"
 
+  CHATWOOT_ENABLED: "true"
+
   CACHE_REDIS_ENABLED: "true"
   CACHE_LOCAL_ENABLED: "false"
   CACHE_REDIS_PREFIX_KEY: "${EVO_CACHE_PREFIX}"
