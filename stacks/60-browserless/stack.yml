@@ -1,13 +1,74 @@
-version: "3.8"
+version: "3.7"
+
+x-browserless-env: &browserless_env
+  # Browserless v2 (GHCR)
+  HOST: "0.0.0.0"
+
+  # Concurrency / Queue (mantive os nomes que você já estava usando)
+  CONCURRENT: "${BROWSERLESS_CONCURRENT:-5}"
+  QUEUED: "${BROWSERLESS_QUEUED:-10}"
+
+  # Recomendado pela documentação para proteção de overload
+  HEALTH: "true"
+
 services:
   browserless:
-    image: ghcr.io/browserless/chromium
-    container_name: browserless
-    ports:
-      - "3000:3000"
+    # ✅ Pin de versão para estabilidade (evita "latest" quebrar stack por mudança upstream)
+    image: ghcr.io/browserless/chromium:v2.42.0
+
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - |
+        set -e;
+
+        # Fail-fast (protocolo)
+        test -f /run/secrets/browserless_token || { echo "ERROR missing browserless_token"; ls -lah /run/secrets || true; exit 1; };
+
+        # Browserless usa TOKEN como env var
+        export TOKEN="$$(cat /run/secrets/browserless_token)";
+
+        exec /usr/bin/dumb-init -- /bin/sh -lc "/usr/src/app/scripts/start.sh"
+
     environment:
-      - HOST=0.0.0.0
-      - TOKEN=seu_token_seguro
-      - CONCURRENT=5
-      - QUEUED=10
-    restart: unless-stopped
+      <<: *browserless_env
+
+    networks:
+      - edge
+      - data
+
+    secrets:
+      - source: browserless_token
+        target: browserless_token
+
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+      labels:
+        - traefik.enable=true
+
+        # ✅ fixa a network que o Traefik usa
+        - traefik.docker.network=${EDGE_NETWORK}
+
+        # ✅ FQDN derivado no YAML (padrão Pulse4Mind)
+        - traefik.http.routers.browserless.rule=Host(`${DNS_PREFIX}.browserless.${BASE_DOMAIN}`)
+        - traefik.http.routers.browserless.entrypoints=websecure
+        - traefik.http.routers.browserless.tls=true
+        - traefik.http.routers.browserless.tls.certresolver=letsencryptresolver
+
+        - traefik.http.services.browserless.loadbalancer.server.port=3000
+
+secrets:
+  browserless_token:
+    external: true
+    name: "${STACK_PREFIX}_browserless_token"
+
+networks:
+  edge:
+    external: true
+    name: "${EDGE_NETWORK}"
+  data:
+    external: true
+    name: "${DATA_NETWORK}"
