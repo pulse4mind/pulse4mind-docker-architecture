@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  browserless:
+    image: ghcr.io/browserless/chromium
+    container_name: browserless
+    ports:
+      - "3000:3000"
+    environment:
+      - HOST=0.0.0.0
+      - TOKEN=seu_token_seguro
+      - CONCURRENT=5
+      - QUEUED=10
+    restart: unless-stopped
