@@ -31,6 +31,11 @@ services:
       labels:
         - "traefik.enable=true"
 
+        # ✅ FIX DEFINITIVO: evita erro "port is missing" no próprio serviço do Traefik
+        # O provider docker tenta criar um service default para o container "traefik-traefik".
+        # Declaramos explicitamente a porta 8080 (dashboard/API interno) para estabilizar o provider.
+        - "traefik.http.services.traefik-traefik.loadbalancer.server.port=8080"
+
         # Catch-all HTTP → HTTPS
         - "traefik.http.routers.http-catchall.rule=HostRegexp(`{host:.+}`)"
         - "traefik.http.routers.http-catchall.entrypoints=web"
@@ -44,6 +49,7 @@ services:
         - "traefik.http.routers.traefik.rule=Host(`${DNS_PREFIX}.traefik.${BASE_DOMAIN}`)"
         - "traefik.http.routers.traefik.entrypoints=websecure"
         - "traefik.http.routers.traefik.service=api@internal"
+        - "traefik.http.routers.traefik.tls=true"
         - "traefik.http.routers.traefik.tls.certresolver=letsencryptresolver"
 
     volumes:
