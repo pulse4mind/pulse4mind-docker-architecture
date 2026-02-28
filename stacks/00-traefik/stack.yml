@@ -31,9 +31,6 @@ services:
       labels:
         - "traefik.enable=true"
 
-        # ✅ FIX: elimina o erro "port is missing" para o próprio serviço traefik-traefik
-        - "traefik.http.services.traefik-traefik.loadbalancer.server.port=8080"
-
         # Catch-all HTTP → HTTPS
         - "traefik.http.routers.http-catchall.rule=HostRegexp(`{host:.+}`)"
         - "traefik.http.routers.http-catchall.entrypoints=web"
@@ -43,14 +40,15 @@ services:
         - "traefik.http.middlewares.redirect-https.redirectscheme.scheme=https"
         - "traefik.http.middlewares.redirect-https.redirectscheme.permanent=true"
 
-        # Dashboard Traefik (DNS padrão)
+        # ✅ Derivado no YAML (mesmo padrão do Chatwoot)
         - "traefik.http.routers.traefik.rule=Host(`${DNS_PREFIX}.traefik.${BASE_DOMAIN}`)"
         - "traefik.http.routers.traefik.entrypoints=websecure"
         - "traefik.http.routers.traefik.service=api@internal"
-
-        # ✅ FIX: tls explícito (melhor prática, evita ambiguidades)
-        - "traefik.http.routers.traefik.tls=true"
         - "traefik.http.routers.traefik.tls.certresolver=letsencryptresolver"
+
+        # ✅ FIX: evita "port is missing" no serviço do próprio Traefik
+        # (o provider Docker tenta “montar” um service para o container e precisa de uma porta explícita)
+        - "traefik.http.services.traefik.loadbalancer.server.port=8080"
 
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
