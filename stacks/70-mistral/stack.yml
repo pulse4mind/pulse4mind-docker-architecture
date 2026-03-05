@@ -1,0 +1,95 @@
+version: "3.7"
+
+x-mistral-env: &mistral_env
+  TZ: ${TZ}
+
+  # Cache (evita baixar pesos toda vez)
+  HF_HOME: /root/.cache/huggingface
+  TRANSFORMERS_CACHE: /root/.cache/huggingface
+
+services:
+  mistral_api:
+    image: vllm/vllm-openai:latest
+    entrypoint: ["/bin/sh", "-lc"]
+    command: |
+      set -e
+
+      # Secrets obrigatórios
+      test -f /run/secrets/mistral_api_key || { echo 'ERROR missing mistral_api_key'; ls -lah /run/secrets || true; exit 1; }
+
+      # Hugging Face token (recomendado; pode ser necessário dependendo do modelo / rate limits)
+      test -f /run/secrets/huggingface_token || { echo 'ERROR missing huggingface_token'; ls -lah /run/secrets || true; exit 1; }
+
+      export VLLM_API_KEY="$$(cat /run/secrets/mistral_api_key)"
+      export HUGGING_FACE_HUB_TOKEN="$$(cat /run/secrets/huggingface_token)"
+
+      # vLLM OpenAI-compatible server
+      # Ref: documentação do vLLM (OpenAI compatible server) :contentReference[oaicite:2]{index=2}
+      exec python -m vllm.entrypoints.openai.api_server \
+        --host 0.0.0.0 \
+        --port 8000 \
+        --model "${MISTRAL_MODEL_ID}" \
+        --served-model-name "${MISTRAL_SERVED_MODEL_NAME}" \
+        --dtype auto \
+        --max-model-len "${MISTRAL_MAX_MODEL_LEN}" \
+        --api-key "$${VLLM_API_KEY}"
+
+    environment:
+      <<: *mistral_env
+
+    volumes:
+      - mistral_hf_cache:/root/.cache/huggingface
+
+    networks:
+      - edge
+      - data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python - <<'PY'\nimport json,urllib.request\nu='http://127.0.0.1:8000/v1/models'\ntry:\n  r=urllib.request.urlopen(u,timeout=2)\n  json.loads(r.read().decode('utf-8'))\n  raise SystemExit(0)\nexcept Exception:\n  raise SystemExit(1)\nPY"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=${EDGE_NETWORK}
+
+        # Roteamento (ex.: thermas.mistral.pulse4mind.com)
+        - traefik.http.routers.mistral_api.rule=Host(`${DOMAIN_MISTRAL}`)
+        - traefik.http.routers.mistral_api.entrypoints=websecure
+        - traefik.http.routers.mistral_api.tls.certresolver=letsencryptresolver
+
+        # Porta interna do container
+        - traefik.http.services.mistral_api.loadbalancer.server.port=8000
+
+secrets:
+  mistral_api_key:
+    external: true
+    name: "${STACK_PREFIX}_mistral_api_key"
+
+  huggingface_token:
+    external: true
+    name: "${STACK_PREFIX}_huggingface_token"
+
+volumes:
+  mistral_hf_cache:
+    external: true
+    name: "${TENANT}_${ENV}_mistral_hf_cache"
+
+networks:
+  edge:
+    external: true
+    name: "${EDGE_NETWORK}"
+  data:
+    external: true
+    name: "${DATA_NETWORK}"
