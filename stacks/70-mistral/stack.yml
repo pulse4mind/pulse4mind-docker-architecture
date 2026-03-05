@@ -16,15 +16,11 @@ services:
 
       # Secrets obrigatórios
       test -f /run/secrets/mistral_api_key || { echo 'ERROR missing mistral_api_key'; ls -lah /run/secrets || true; exit 1; }
-
-      # Hugging Face token (recomendado; pode ser necessário dependendo do modelo / rate limits)
       test -f /run/secrets/huggingface_token || { echo 'ERROR missing huggingface_token'; ls -lah /run/secrets || true; exit 1; }
 
       export VLLM_API_KEY="$$(cat /run/secrets/mistral_api_key)"
       export HUGGING_FACE_HUB_TOKEN="$$(cat /run/secrets/huggingface_token)"
 
-      # vLLM OpenAI-compatible server
-      # Ref: documentação do vLLM (OpenAI compatible server) :contentReference[oaicite:2]{index=2}
       exec python -m vllm.entrypoints.openai.api_server \
         --host 0.0.0.0 \
         --port 8000 \
@@ -43,6 +39,10 @@ services:
     networks:
       - edge
       - data
+
+    secrets:
+      - mistral_api_key
+      - huggingface_token
 
     healthcheck:
       test:
@@ -64,12 +64,10 @@ services:
         - traefik.enable=true
         - traefik.docker.network=${EDGE_NETWORK}
 
-        # Roteamento (ex.: thermas.mistral.pulse4mind.com)
         - traefik.http.routers.mistral_api.rule=Host(`${DOMAIN_MISTRAL}`)
         - traefik.http.routers.mistral_api.entrypoints=websecure
         - traefik.http.routers.mistral_api.tls.certresolver=letsencryptresolver
 
-        # Porta interna do container
         - traefik.http.services.mistral_api.loadbalancer.server.port=8000
 
 secrets:
@@ -84,7 +82,7 @@ secrets:
 volumes:
   mistral_hf_cache:
     external: true
-    name: "${TENANT}_${ENV}_mistral_hf_cache"
+    name: "${STACK_PREFIX}_mistral_hf_cache"
 
 networks:
   edge:
