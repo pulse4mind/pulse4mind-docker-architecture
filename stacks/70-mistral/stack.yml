@@ -64,7 +64,8 @@ services:
         - traefik.enable=true
         - traefik.docker.network=${EDGE_NETWORK}
 
-        - traefik.http.routers.mistral_api.rule=Host(`${DOMAIN_MISTRAL}`)
+        # DNS derivado: {TENANT}.mistral.{BASE_DOMAIN}
+        - traefik.http.routers.mistral_api.rule=Host(`${TENANT}.mistral.${BASE_DOMAIN}`)
         - traefik.http.routers.mistral_api.entrypoints=websecure
         - traefik.http.routers.mistral_api.tls.certresolver=letsencryptresolver
 
