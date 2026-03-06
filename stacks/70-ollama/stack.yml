@@ -6,33 +6,6 @@ x-ollama-env: &ollama_env
 services:
   ollama:
     image: ollama/ollama:latest
-    entrypoint: ["/bin/sh", "-lc"]
-    command: |
-      set -eu
-
-      echo "== Ollama bootstrap starting =="
-
-      ollama serve &
-      OLLAMA_PID="$!"
-
-      # Aguarda API local responder antes de tentar pull de modelos
-      for i in $(seq 1 60); do
-        if wget -qO- http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
-          break
-        fi
-        sleep 2
-      done
-
-      # Pull opcional de modelos definidos no .env
-      if [ -n "${OLLAMA_PULL_MODELS:-}" ]; then
-        for model in ${OLLAMA_PULL_MODELS}; do
-          echo "== Pulling model: ${model} =="
-          ollama pull "${model}" || true
-        done
-      fi
-
-      echo "== Ollama started =="
-      wait "${OLLAMA_PID}"
 
     environment:
       <<: *ollama_env
@@ -64,7 +37,6 @@ services:
         - traefik.enable=true
         - traefik.docker.network=${EDGE_NETWORK}
 
-        # DNS derivado: {TENANT}.ollama.{BASE_DOMAIN}
         - traefik.http.routers.ollama.rule=Host(`${DNS_PREFIX}.ollama.${BASE_DOMAIN}`)
         - traefik.http.routers.ollama.entrypoints=websecure
         - traefik.http.routers.ollama.tls.certresolver=letsencryptresolver
