@@ -65,7 +65,7 @@ services:
         - traefik.docker.network=${EDGE_NETWORK}
 
         # DNS derivado: {TENANT}.ollama.{BASE_DOMAIN}
-        - traefik.http.routers.ollama.rule=Host(`${TENANT}.ollama.${BASE_DOMAIN}`)
+        - traefik.http.routers.ollama.rule=Host(`${DNS_PREFIX}.ollama.${BASE_DOMAIN}`)
         - traefik.http.routers.ollama.entrypoints=websecure
         - traefik.http.routers.ollama.tls.certresolver=letsencryptresolver
 
