@@ -6,6 +6,8 @@ x-ollama-env: &ollama_env
 services:
   ollama:
     image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
 
     environment:
       <<: *ollama_env
@@ -17,12 +19,12 @@ services:
       - edge
       - data
 
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:11434/api/tags >/dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 10
-      start_period: 40s
+    # healthcheck:
+    #   test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:11434/api/tags >/dev/null 2>&1 || exit 1"]
+    #   interval: 30s
+    #   timeout: 5s
+    #   retries: 10
+    #   start_period: 40s
 
     deploy:
       replicas: 1
